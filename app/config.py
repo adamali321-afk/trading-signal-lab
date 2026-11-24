@@ -6,7 +6,9 @@ load_dotenv()
 TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "").strip()
 MARKET_DATA_PROVIDER = os.getenv("MARKET_DATA_PROVIDER", "twelvedata").strip().lower()
 ENABLE_YAHOO_FALLBACK = os.getenv("ENABLE_YAHOO_FALLBACK", "true").strip().lower() in {"1", "true", "yes", "on"}
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DATABASE_PATH = os.getenv("DATABASE_PATH", "./data/trading_signals.db")
-Path(DATABASE_PATH).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
-APP_VERSION = "1.0.0"
+if not DATABASE_URL:
+    Path(DATABASE_PATH).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
+APP_VERSION = "1.1.0"
 STRATEGY_VERSION = "trend-momentum-1.0"
