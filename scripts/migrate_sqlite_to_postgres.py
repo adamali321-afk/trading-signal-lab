@@ -13,6 +13,8 @@ from pathlib import Path
 import psycopg
 from psycopg.rows import dict_row
 
+from app.db import init_db
+
 TABLES = {
     "signals": (
         "id, created_at, symbol, timeframe, direction, entry_reference, stop_loss, "
@@ -36,7 +38,7 @@ def main():
         raise SystemExit("Set DATABASE_URL to your PostgreSQL connection string.")
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-    src = sqlite3.connect(f"file:{source_path.resolve()}?mode=ro", uri=True)
+    # Ensure the destination schema exists before checking that it is empty.\n    init_db()\n\n    src = sqlite3.connect(f"file:{source_path.resolve()}?mode=ro", uri=True)
     src.row_factory = sqlite3.Row
     with psycopg.connect(database_url, row_factory=dict_row) as dst:
         counts = {
