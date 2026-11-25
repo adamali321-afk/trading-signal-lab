@@ -7,6 +7,7 @@ The export is preserved as-is. Destination must be empty; inserts are atomic.
 """
 import json
 import os
+import math
 import sys
 from pathlib import Path
 
@@ -27,6 +28,16 @@ TABLES = {
         "exit", "exit_time", "exit_reason", "result_r"
     ],
 }
+
+
+def normalize(value):
+    if isinstance(value, float):
+        return round(value, 12) if math.isfinite(value) else str(value)
+    if isinstance(value, dict):
+        return {k: normalize(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [normalize(v) for v in value]
+    return value
 
 
 def main():
@@ -74,9 +85,19 @@ def main():
                 raise RuntimeError(f"Verification failed for {table}: IDs differ.")
             if len(dest_ids) != reported[table]:
                 raise RuntimeError(f"Verification failed for {table}: row count differs.")
+            dest_rows = dst.execute(
+                f"SELECT {', '.join(TABLES[table])} FROM {table} ORDER BY id"
+            ).fetchall()
+            for idx, (src_record, dest_record) in enumerate(zip(rows[table], dest_rows)):
+                src_normalized = normalize({col: src_record.get(col) for col in TABLES[table]})
+                dest_normalized = normalize(dict(dest_record))
+                if src_normalized != dest_normalized:
+                    raise RuntimeError(
+                        f"Verification failed for {table} record index {idx}, id={src_record['id']}: field values differ."
+                    )
     print(f"Imported export timestamp: {payload.get('exported_at')}")
     for table in TABLES:
-        print(f"{table}: {reported[table]} rows imported and verified (IDs match)")
+        print(f"{table}: {reported[table]} rows imported and verified (counts, IDs, and field values match)")
 
 
 if __name__ == "__main__":
