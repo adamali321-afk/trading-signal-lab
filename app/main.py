@@ -2,11 +2,12 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from .config import TWELVE_DATA_API_KEY, MARKET_DATA_PROVIDER, ENABLE_YAHOO_FALLBACK, APP_VERSION, STRATEGY_VERSION
+import secrets
+from .config import TWELVE_DATA_API_KEY, MARKET_DATA_PROVIDER, ENABLE_YAHOO_FALLBACK, APP_VERSION, STRATEGY_VERSION, REPORT_JOB_TOKEN
 from .market_data import MarketDataRouter
 from .analysis import analyse
 from .backtest import run_backtest
-from .db import init_db, save_signal, list_signals, list_trades, update_open_trades, performance
+from .db import init_db, save_signal, list_signals, list_trades, update_open_trades, performance, daily_reports
 
 app=FastAPI(title="Trading Signal Lab",version=APP_VERSION,description="Local-first market analysis and paper-trading journal. No live order execution.")
 BASE=Path(__file__).resolve().parent
@@ -84,6 +85,29 @@ def signals(limit:int=Query(100,ge=1,le=500)): return list_signals(limit)
 def paper_trades(status:str|None=None,limit:int=Query(200,ge=1,le=1000)):
     if status not in (None,'OPEN','CLOSED'): raise HTTPException(400,'status must be OPEN or CLOSED')
     return list_trades(status,limit)
+
+
+@app.get('/api/daily-reports')
+def daily_report_data(days:int=Query(30,ge=1,le=365)):
+    return daily_reports(days)
+
+
+@app.post('/api/jobs/evaluate-open-trades')
+async def evaluate_open_paper_trades(x_job_token:str|None=__import__('fastapi').Header(default=None)):
+    if not REPORT_JOB_TOKEN:
+        raise HTTPException(503, 'Scheduled evaluation is not configured. Set REPORT_JOB_TOKEN on the service.')
+    if not x_job_token or not secrets.compare_digest(x_job_token, REPORT_JOB_TOKEN):
+        raise HTTPException(401, 'Invalid job token')
+    open_trades = list_trades('OPEN', 1000)
+    groups = sorted({(trade['symbol'], trade['timeframe']) for trade in open_trades})
+    closed_ids, errors = [], []
+    for symbol, timeframe in groups:
+        try:
+            data, provider, _ = await router.candles(symbol, timeframe, 5000)
+            closed_ids.extend(update_open_trades(symbol, timeframe, data))
+        except Exception as exc:
+            errors.append({"symbol": symbol, "timeframe": timeframe, "error": str(exc)[:200]})
+    return {"groups_checked": len(groups), "open_trades_seen": len(open_trades), "trades_closed": len(closed_ids), "closed_trade_ids": closed_ids, "errors": errors}
 
 @app.get('/api/performance')
 def stats(): return performance()
