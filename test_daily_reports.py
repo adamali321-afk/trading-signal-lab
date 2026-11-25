@@ -1,4 +1,5 @@
-from datetime import datetime, timezone\nfrom zoneinfo import ZoneInfo
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from app import db
 
