@@ -10,5 +10,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DATABASE_PATH = os.getenv("DATABASE_PATH", "./data/trading_signals.db")
 if not DATABASE_URL:
     Path(DATABASE_PATH).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 STRATEGY_VERSION = "trend-momentum-1.0"
+
+REPORT_JOB_TOKEN = os.getenv("REPORT_JOB_TOKEN", "").strip()
