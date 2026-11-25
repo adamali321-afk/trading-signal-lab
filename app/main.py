@@ -3,6 +3,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import secrets
+from datetime import datetime, timezone, timedelta
+import httpx
 from .config import TWELVE_DATA_API_KEY, MARKET_DATA_PROVIDER, ENABLE_YAHOO_FALLBACK, APP_VERSION, STRATEGY_VERSION, REPORT_JOB_TOKEN
 from .market_data import MarketDataRouter
 from .analysis import analyse
@@ -13,6 +15,7 @@ app=FastAPI(title="Trading Signal Lab",version=APP_VERSION,description="Local-fi
 BASE=Path(__file__).resolve().parent
 app.mount('/static',StaticFiles(directory=BASE/'static'),name='static')
 router=MarketDataRouter(MARKET_DATA_PROVIDER,TWELVE_DATA_API_KEY,ENABLE_YAHOO_FALLBACK)
+_fx_cache={'rate':None,'date':None,'fetched_at':None}
 INTERVALS={'5min','15min','1h','4h','1day'}
 WATCHLIST=['NVDA','MU','AMD','INTC','MSFT','AAPL','AMZN','TSLA','IREN','CRWV','APLD','WDC','STX','TERA','RIOT','QBTS','RKLB','QQQ','SPY','DIA','IWM']
 
@@ -28,6 +31,27 @@ def health(): return {'status':'ok','version':APP_VERSION,'strategy_version':STR
 
 @app.get('/api/watchlist')
 def watchlist(): return WATCHLIST
+
+@app.get('/api/fx/usd-eur')
+async def usd_eur_rate():
+    """Latest daily USD/EUR reference rate, cached in memory for six hours."""
+    now=datetime.now(timezone.utc)
+    cached_at=_fx_cache.get('fetched_at')
+    if _fx_cache.get('rate') is not None and cached_at and now-cached_at < timedelta(hours=6):
+        return {'base':'USD','quote':'EUR','rate':_fx_cache['rate'],'date':_fx_cache['date'],'source':'Frankfurter reference rates','cached':True}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response=await client.get('https://api.frankfurter.dev/v1/latest',params={'base':'USD','symbols':'EUR'})
+            response.raise_for_status()
+            payload=response.json()
+        rate=float(payload['rates']['EUR'])
+        if rate <= 0: raise ValueError('Invalid exchange rate')
+        _fx_cache.update({'rate':rate,'date':payload.get('date'),'fetched_at':now})
+        return {'base':'USD','quote':'EUR','rate':rate,'date':payload.get('date'),'source':'Frankfurter reference rates','cached':False}
+    except Exception as exc:
+        if _fx_cache.get('rate') is not None:
+            return {'base':'USD','quote':'EUR','rate':_fx_cache['rate'],'date':_fx_cache['date'],'source':'Frankfurter reference rates','cached':True,'stale':True}
+        raise HTTPException(502,f'USD/EUR reference rate unavailable: {str(exc)[:160]}') from exc
 
 @app.get('/api/candles/{symbol}')
 async def candles(symbol:str,interval:str=Query('15min'),outputsize:int=Query(300,ge=60,le=5000)):
