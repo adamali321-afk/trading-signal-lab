@@ -169,7 +169,9 @@ def daily_reports(days=30):
     from datetime import date, timedelta
 
     days = max(1, min(int(days), 365))
-    from zoneinfo import ZoneInfo\n\n    today = datetime.now(timezone.utc).astimezone(ZoneInfo("Europe/Berlin")).date()
+    from zoneinfo import ZoneInfo
+
+    today = datetime.now(timezone.utc).astimezone(ZoneInfo("Europe/Berlin")).date()
     start = today - timedelta(days=days - 1)
     with connect() as c:
         signals = c.execute("SELECT created_at, direction FROM signals ORDER BY id DESC LIMIT 50000").fetchall()
