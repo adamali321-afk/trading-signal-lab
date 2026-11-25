@@ -11,5 +11,5 @@ services:
         value: twelvedata
       - key: ENABLE_YAHOO_FALLBACK
         value: true
-      - key: DATABASE_PATH
-        value: /tmp/trading_signals.db
+      - key: DATABASE_URL
+        sync: false

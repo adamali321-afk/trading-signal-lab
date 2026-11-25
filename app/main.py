@@ -21,6 +21,7 @@ def startup(): init_db()
 @app.get('/',response_class=HTMLResponse)
 def home(): return (BASE/'static'/'index.html').read_text(encoding='utf-8')
 
+
 @app.get('/api/health')
 def health(): return {'status':'ok','version':APP_VERSION,'strategy_version':STRATEGY_VERSION,'primary_provider':MARKET_DATA_PROVIDER,'yahoo_fallback_enabled':ENABLE_YAHOO_FALLBACK,'twelve_data_key_configured':bool(TWELVE_DATA_API_KEY),'live_trading_enabled':False}
 
