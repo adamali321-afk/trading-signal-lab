@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone\nfrom zoneinfo import ZoneInfo
 
 from app import db
 
@@ -37,7 +37,7 @@ def test_daily_reports_count_only_resolved_trades_by_resolution_day(tmp_path, mo
             )
 
     report = db.daily_reports(days=3)
-    today = datetime.now(timezone.utc).astimezone().date().isoformat()
+    today = datetime.now(timezone.utc).astimezone(ZoneInfo("Europe/Berlin")).date().isoformat()
     item = next(day for day in report["days"] if day["date"] == today)
     assert item["signals"] == 3
     assert item["paper_trades_opened"] == 3
