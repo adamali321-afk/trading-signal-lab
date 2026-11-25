@@ -1,0 +1,28 @@
+name: Daily paper-trade evaluation
+
+on:
+  schedule:
+    # After the US cash session close in both standard and daylight time.
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate open paper trades
+        env:
+          APP_URL: https://trading-signal-lab.onrender.com
+          REPORT_JOB_TOKEN: ${{ secrets.REPORT_JOB_TOKEN }}
+        run: |
+          if [ -z "$REPORT_JOB_TOKEN" ]; then
+            echo "::error::Add REPORT_JOB_TOKEN as a GitHub Actions repository secret and as a Render environment variable."
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "X-Job-Token: $REPORT_JOB_TOKEN" \
+            "$APP_URL/api/jobs/evaluate-open-trades"
