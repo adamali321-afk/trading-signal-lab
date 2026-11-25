@@ -1,14 +1,12 @@
-from fastapi import FastAPI, HTTPException, Query, Header
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from datetime import datetime, timezone
-import secrets
-from .config import TWELVE_DATA_API_KEY, MARKET_DATA_PROVIDER, ENABLE_YAHOO_FALLBACK, APP_VERSION, STRATEGY_VERSION, DATABASE_EXPORT_TOKEN
+from .config import TWELVE_DATA_API_KEY, MARKET_DATA_PROVIDER, ENABLE_YAHOO_FALLBACK, APP_VERSION, STRATEGY_VERSION
 from .market_data import MarketDataRouter
 from .analysis import analyse
 from .backtest import run_backtest
-from .db import init_db, save_signal, list_signals, list_trades, update_open_trades, performance, connect
+from .db import init_db, save_signal, list_signals, list_trades, update_open_trades, performance
 
 app=FastAPI(title="Trading Signal Lab",version=APP_VERSION,description="Local-first market analysis and paper-trading journal. No live order execution.")
 BASE=Path(__file__).resolve().parent
@@ -23,21 +21,6 @@ def startup(): init_db()
 @app.get('/',response_class=HTMLResponse)
 def home(): return (BASE/'static'/'index.html').read_text(encoding='utf-8')
 
-
-@app.get('/api/admin/export')
-def export_database(authorization: str | None = Header(default=None)):
-    """Temporary, bearer-token protected full database export for migration."""
-    if not DATABASE_EXPORT_TOKEN:
-        raise HTTPException(404, 'Not found')
-    expected = f'Bearer {DATABASE_EXPORT_TOKEN}'
-    if not authorization or not secrets.compare_digest(authorization, expected):
-        raise HTTPException(401, 'Unauthorized', headers={'WWW-Authenticate': 'Bearer'})
-    with connect() as c:
-        signals = [dict(row) for row in c.execute('SELECT * FROM signals ORDER BY id ASC').fetchall()]
-        trades = [dict(row) for row in c.execute('SELECT * FROM paper_trades ORDER BY id ASC').fetchall()]
-    return {'exported_at': datetime.now(timezone.utc).isoformat(), 'schema_version': 1,
-            'counts': {'signals': len(signals), 'paper_trades': len(trades)},
-            'signals': signals, 'paper_trades': trades}
 
 @app.get('/api/health')
 def health(): return {'status':'ok','version':APP_VERSION,'strategy_version':STRATEGY_VERSION,'primary_provider':MARKET_DATA_PROVIDER,'yahoo_fallback_enabled':ENABLE_YAHOO_FALLBACK,'twelve_data_key_configured':bool(TWELVE_DATA_API_KEY),'live_trading_enabled':False}
