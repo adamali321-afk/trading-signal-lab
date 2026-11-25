@@ -147,3 +147,63 @@ def performance():
         peak = max(peak, equity)
         max_dd = max(max_dd, peak - equity)
     return {'closed_trades': len(rs), 'open_trades': len(list_trades('OPEN', 10000)), 'wins': wins, 'losses': losses, 'win_rate_pct': round(wins / len(rs) * 100, 2) if rs else None, 'net_r': round(sum(rs), 2), 'expectancy_r': round(sum(rs) / len(rs), 3) if rs else None, 'profit_factor': round(gross_win / gross_loss, 2) if gross_loss else (None if not gross_win else 'infinite'), 'max_drawdown_r': round(max_dd, 2), 'note': 'Paper simulation only. Intrabar order is unknown; stop is assumed first when stop and target are both touched.'}
+
+
+def _local_day(value):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    if not value:
+        return None
+    try:
+        stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return stamp.astimezone(ZoneInfo("Europe/Berlin")).date().isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def daily_reports(days=30):
+    """Aggregate signals by creation day and paper-trade outcomes by resolution day."""
+    from datetime import date, timedelta
+
+    days = max(1, min(int(days), 365))
+    today = datetime.now(timezone.utc).astimezone().date()
+    start = today - timedelta(days=days - 1)
+    with connect() as c:
+        signals = c.execute("SELECT created_at, direction FROM signals ORDER BY id DESC LIMIT 50000").fetchall()
+        trades = c.execute("SELECT created_at, exit_time, result_r, status FROM paper_trades ORDER BY id DESC LIMIT 50000").fetchall()
+
+    buckets = {}
+    for offset in range(days):
+        day = (start + timedelta(days=offset)).isoformat()
+        buckets[day] = {"date": day, "signals": 0, "paper_trades_opened": 0, "resolved": 0, "wins": 0, "losses": 0, "win_rate_pct": None, "net_r": 0.0}
+
+    for row in signals:
+        day = _local_day(row["created_at"])
+        if day in buckets:
+            buckets[day]["signals"] += 1
+
+    for row in trades:
+        opened_day = _local_day(row["created_at"])
+        if opened_day in buckets:
+            buckets[opened_day]["paper_trades_opened"] += 1
+        resolved_day = _local_day(row["exit_time"])
+        if resolved_day in buckets and row["status"] == "CLOSED":
+            item = buckets[resolved_day]
+            item["resolved"] += 1
+            result = float(row["result_r"] or 0)
+            item["net_r"] += result
+            if result > 0:
+                item["wins"] += 1
+            elif result < 0:
+                item["losses"] += 1
+
+    output = []
+    for item in buckets.values():
+        resolved = item["wins"] + item["losses"]
+        item["win_rate_pct"] = round(item["wins"] / resolved * 100, 2) if resolved else None
+        item["net_r"] = round(item["net_r"], 2)
+        output.append(item)
+    return {"timezone": "Europe/Berlin", "days": output, "note": "Win rate includes resolved paper trades only. Open positions are not counted as wins or losses; outcomes are grouped by the day the stop or target was reached."}
