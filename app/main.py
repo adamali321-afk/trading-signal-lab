@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -93,7 +93,7 @@ def daily_report_data(days:int=Query(30,ge=1,le=365)):
 
 
 @app.post('/api/jobs/evaluate-open-trades')
-async def evaluate_open_paper_trades(x_job_token:str|None=__import__('fastapi').Header(default=None)):
+async def evaluate_open_paper_trades(x_job_token:str|None=Header(default=None)):
     if not REPORT_JOB_TOKEN:
         raise HTTPException(503, 'Scheduled evaluation is not configured. Set REPORT_JOB_TOKEN on the service.')
     if not x_job_token or not secrets.compare_digest(x_job_token, REPORT_JOB_TOKEN):
